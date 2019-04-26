@@ -1,0 +1,45 @@
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: traffic-split
+spec:
+  inputs:
+    params:
+    - name: ROUTE_NAME
+      description: The name of the Route to update
+    - name: ROUTE_NAMESPACE
+      description: The namespace of the Route to update
+      default: default
+    - name: REVISION_A_NAME:
+      description: The name of "revision A"
+    - name: REVISION_A_PERCENT:
+      description: Traffic split percentage desired for "revision A"
+    - name: REVISION_B_NAME:
+      description: The name of "revision B"
+    - name: REVISION_B_PERCENT:
+      description: Traffic split percentage desired for "revision B"
+
+    resources:
+    - name: cluster
+      type: cluster
+
+  steps:
+  - name: apply
+    image: bitnami/kubectl
+    command: /bin/bash
+    args:
+    - -c
+    - |
+      cat << EOF | kubectl --kubeconfig /workspace/${inputs.resources.cluster.Name}/kubeconfig --context ${inputs.resources.cluster.Name} apply -f -
+      apiVersion: serving.knative.dev/v1alpha1
+      kind: Route
+      metadata:
+        name: ${inputs.params.ROUTE_NAME}
+        namespace: ${inputs.params.ROUTE_NAMESPACE}
+      spec:
+        traffic:
+          - revisionName: ${inputs.params.REVISION_A_NAME}
+            percent: ${inputs.params.REVISION_A_PERCENT}
+          - revisionName: ${inputs.params.REVISION_B_NAME}
+            percent: ${inputs.params.REVISION_B_PERCENT}
+      EOF

@@ -1,0 +1,44 @@
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: deploy-revision
+spec:
+  inputs:
+    params:
+    - name: CONFIGURATION_NAME
+      description: Name of the configuration to deploy to
+    - name: CONFIGURATION_NAMESPACE
+      description: Namespace of the configuration to deploy to
+      default: default
+
+    resources:
+    - name: image
+      type: image
+    - name: cluster
+      type: cluster
+
+  # TODO: expose revision name as an output param
+
+  steps:
+  - name: apply
+    image: bitnami/kubectl
+    command: /bin/bash
+    args:
+    - -c
+    - |
+      cat << EOF | kubectl --kubeconfig /workspace/${inputs.resources.cluster.Name}/kubeconfig --context ${inputs.resources.cluster.Name} apply -f -
+      apiVersion: serving.knative.dev/v1alpha1
+      kind: Configuration
+      metadata:
+        name: ${inputs.params.CONFIGURATION_NAME}
+        namespace: ${inputs.params.CONFIGURATION_NAMESPACE}
+      spec:
+        revisionTemplate:
+          metadata:
+            labels:
+              knative.dev/type: container
+          spec:
+            container:
+              image: ${inputs.resources.image.url}@${inputs.resources.image.digest}
+              imagePullPolicy: Always
+      EOF
